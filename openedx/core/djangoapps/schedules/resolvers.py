@@ -18,7 +18,7 @@ from lms.djangoapps.courseware.utils import verified_upgrade_deadline_link, veri
 from lms.djangoapps.discussion.notification_prefs.views import UsernameCipher
 from openedx.core.djangoapps.ace_common.template_context import get_base_template_context
 from openedx.core.djangoapps.schedules.config import COURSE_UPDATE_SHOW_UNSUBSCRIBE_WAFFLE_SWITCH
-from openedx.core.djangoapps.schedules.content_highlights import get_week_highlights
+from openedx.core.djangoapps.schedules.content_highlights import get_week_highlights, get_next_section_highlights
 from openedx.core.djangoapps.schedules.exceptions import CourseUpdateDoesNotExist
 from openedx.core.djangoapps.schedules.message_types import CourseUpdate, InstructorLedCourseUpdate
 from openedx.core.djangoapps.schedules.models import Schedule, ScheduleExperience
@@ -111,6 +111,8 @@ class BinnedSchedulesBaseResolver(PrefixedDebugLoggerMixin, RecipientResolver):
         order_by -- string for field to sort the resulting Schedules by
         """
         target_day = _get_datetime_beginning_of_day(self.target_datetime)
+        print('self.target_datetime: {}'.format(self.target_datetime))
+        print('self.schedule_date_field: {}'.format(self.schedule_date_field))
         schedule_day_equals_target_day_filter = {
             'courseenrollment__schedule__{}__gte'.format(self.schedule_date_field): target_day,
             'courseenrollment__schedule__{}__lt'.format(self.schedule_date_field): target_day + datetime.timedelta(days=1),
@@ -124,6 +126,7 @@ class BinnedSchedulesBaseResolver(PrefixedDebugLoggerMixin, RecipientResolver):
         ).filter(
             id_mod=self.bin_num
         )
+        print('users: {}'.format(users))
 
         schedule_day_equals_target_day_filter = {
             '{}__gte'.format(self.schedule_date_field): target_day,
@@ -149,13 +152,13 @@ class BinnedSchedulesBaseResolver(PrefixedDebugLoggerMixin, RecipientResolver):
         if "read_replica" in settings.DATABASES:
             schedules = schedules.using("read_replica")
 
-        LOG.info(u'Query = %r', schedules.query.sql_with_params())
+        #LOG.info(u'Query = %r', schedules.query.sql_with_params())
 
         with function_trace('schedule_query_set_evaluation'):
             # This will run the query and cache all of the results in memory.
             num_schedules = len(schedules)
 
-        LOG.info(u'Number of schedules = %d', num_schedules)
+        #LOG.info(u'Number of schedules = %d', num_schedules)
 
         # This should give us a sense of the volume of data being processed by each task.
         set_custom_metric('num_schedules', num_schedules)
@@ -384,7 +387,9 @@ class CourseUpdateResolver(BinnedSchedulesBaseResolver):
             user = enrollment.user
 
             try:
-                week_highlights = get_week_highlights(user, enrollment.course_id, week_num)
+                # week_highlights = get_week_highlights(user, enrollment.course_id, week_num)
+                # TODO: Uncomment below and remove above line when enabling AA-68
+                week_highlights = get_next_section_highlights(user, enrollment.course_id)
             except CourseUpdateDoesNotExist:
                 LOG.warning(
                     u'Weekly highlights for user {} in week {} of course {} does not exist or is disabled'.format(
@@ -401,6 +406,7 @@ class CourseUpdateResolver(BinnedSchedulesBaseResolver):
                         'course_id': str(enrollment.course_id),
                     })
 
+                print('Jeff 9')
                 template_context.update({
                     'course_name': schedule.enrollment.course.display_name,
                     'course_url': _get_trackable_course_home_url(enrollment.course_id),
@@ -414,6 +420,7 @@ class CourseUpdateResolver(BinnedSchedulesBaseResolver):
                 })
                 template_context.update(_get_upsell_information_for_schedule(user, schedule))
 
+                print('Jeff 10')
                 yield (user, schedule.enrollment.course.closest_released_language, template_context, course.self_paced)
 
 
